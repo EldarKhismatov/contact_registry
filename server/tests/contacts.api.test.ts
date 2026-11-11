@@ -68,6 +68,52 @@ describe('GET /api/contacts', () => {
   });
 });
 
+describe('фильтрация по статусу', () => {
+  let app: ReturnType<typeof createTestApp>;
+
+  beforeEach(() => {
+    app = createTestApp();
+  });
+
+  it('оставляет только контакты с выбранным статусом', async () => {
+    const response = await request(app).get('/api/contacts').query({ status: 'active' }).expect(200);
+
+    expect(response.body.length).toBeGreaterThan(0);
+    for (const contact of response.body) {
+      expect(contact.statusId).toBe('active');
+    }
+  });
+
+  it('работает вместе с поиском по тексту', async () => {
+    const response = await request(app)
+      .get('/api/contacts')
+      .query({ status: 'active', search: 'Северный' })
+      .expect(200);
+
+    for (const contact of response.body) {
+      expect(contact.statusId).toBe('active');
+      expect(contact.company).toContain('Северный');
+    }
+  });
+
+  it('неизвестный статус трактуется как отсутствие фильтра', async () => {
+    const all = await request(app).get('/api/contacts').expect(200);
+    const filtered = await request(app)
+      .get('/api/contacts')
+      .query({ status: 'no-such-status' })
+      .expect(200);
+
+    expect(filtered.body.length).toBe(all.body.length);
+  });
+
+  it('пустой статус не фильтрует список', async () => {
+    const all = await request(app).get('/api/contacts').expect(200);
+    const filtered = await request(app).get('/api/contacts').query({ status: '' }).expect(200);
+
+    expect(filtered.body.length).toBe(all.body.length);
+  });
+});
+
 describe('POST /api/contacts', () => {
   let app: ReturnType<typeof createTestApp>;
 

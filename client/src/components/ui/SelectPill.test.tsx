@@ -78,4 +78,29 @@ describe('SelectPill', () => {
 
     expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
   });
+
+  it('рендерит панель в портале, чтобы её не обрезал родитель', async () => {
+    const user = userEvent.setup();
+    render(<SelectPill value="new" options={fewOptions} onChange={() => {}} />);
+
+    await user.click(screen.getByRole('combobox'));
+
+    const panel = screen.getByRole('listbox').closest('.select-pill__panel');
+    expect(panel?.parentElement).toBe(document.body);
+  });
+
+  it('выбирает вариант с клавиатуры, когда поиск не показывается', async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    render(<SelectPill value="new" options={fewOptions} onChange={onChange} />);
+
+    screen.getByRole('combobox').focus();
+    await user.keyboard('{ArrowDown}');
+    expect(screen.getByRole('listbox')).toBeInTheDocument();
+
+    await user.keyboard('{ArrowDown}');
+    await user.keyboard('{Enter}');
+
+    expect(onChange).toHaveBeenCalledWith('active');
+  });
 });
