@@ -20,6 +20,11 @@ export function Modal({ isOpen, title, onClose, children, footer }: ModalProps) 
     }
 
     const handleKeyDown = (event: KeyboardEvent) => {
+      // Событие уже обработано вложенным элементом (например, панелью выбора).
+      if (event.defaultPrevented) {
+        return;
+      }
+
       if (event.key === 'Escape') {
         event.preventDefault();
         onClose();

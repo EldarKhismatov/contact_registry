@@ -159,11 +159,11 @@
 }
 
 .select-pill__panel {
-  position: absolute;
-  z-index: 20;
-  top: calc(100% + 4px);
-  left: 0;
-  right: 0;
+  /* Позиция и размер задаются инлайн: панель живёт в портале, чтобы её
+     не обрезали прокручиваемые родители (например, модальное окно). */
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   background: var(--color-surface);
@@ -184,6 +184,8 @@
 }
 
 .select-pill__list {
+  flex: 1 1 auto;
+  min-height: 0;
   max-height: 260px;
   overflow-y: auto;
   padding: var(--space-1);

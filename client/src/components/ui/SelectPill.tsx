@@ -1,4 +1,6 @@
-import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import type { CSSProperties, KeyboardEvent } from 'react';
 
 export interface SelectPillOption {
   value: string;
@@ -21,14 +23,18 @@ interface SelectPillProps {
   searchThreshold?: number;
 }
 
+const PANEL_MAX_HEIGHT = 300;
+const OPTION_HEIGHT = 34;
+
 /**
  * Собственный выбор одного значения («пилюля») вместо нативного <select>.
  *
  * Особенности:
  *  - панель со списком вариантов, а не системный выпадающий список;
  *  - поиск по вариантам появляется только когда вариантов больше порога;
- *  - управление с клавиатуры (↑/↓, Home/End, Enter, Esc, Tab);
- *  - закрытие по клику вне и по Escape.
+ *  - управление с клавиатуры (↑/↓, Home/End, Enter, пробел, Esc, Tab);
+ *  - закрытие по клику вне и по Escape (Escape не закрывает родительское окно);
+ *  - панель рендерится порталом, поэтому не обрезается родительскими контейнерами.
  */
 export function SelectPill({
   value,
@@ -44,10 +50,12 @@ export function SelectPill({
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [activeIndex, setActiveIndex] = useState(0);
+  const [panelPosition, setPanelPosition] = useState<CSSProperties | null>(null);
 
   const rootRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
 
   const listboxId = useId();
   const optionId = (optionValue: string) => `${listboxId}-${optionValue}`;
@@ -71,6 +79,8 @@ export function SelectPill({
     );
   }, [options, search, showSearch]);
 
+  const activeOption = visibleOptions[activeIndex];
+
   // Сбрасываем состояние панели при закрытии.
   useEffect(() => {
     if (!isOpen) {
@@ -84,16 +94,71 @@ export function SelectPill({
     setActiveIndex(0);
   }, [search]);
 
-  // Закрытие по клику вне.
+  // Панель позиционируется относительно кнопки: снизу, а если места нет — сверху.
+  const updatePanelPosition = useCallback(() => {
+    const button = buttonRef.current;
+    if (!button) {
+      return;
+    }
+
+    const rect = button.getBoundingClientRect();
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const spaceAbove = rect.top;
+    const desiredHeight = visibleOptions.length * OPTION_HEIGHT + (showSearch ? 52 : 8) + 8;
+    const openUp = spaceBelow < desiredHeight && spaceAbove > spaceBelow;
+
+    setPanelPosition({
+      position: 'fixed',
+      left: `${rect.left}px`,
+      width: `${rect.width}px`,
+      ...(openUp
+        ? {
+            bottom: `${window.innerHeight - rect.top + 4}px`,
+            maxHeight: `${Math.min(PANEL_MAX_HEIGHT, spaceAbove - 8)}px`,
+          }
+        : {
+            top: `${rect.bottom + 4}px`,
+            maxHeight: `${Math.min(PANEL_MAX_HEIGHT, spaceBelow - 8)}px`,
+          }),
+    });
+  }, [showSearch, visibleOptions.length]);
+
+  useLayoutEffect(() => {
+    if (isOpen) {
+      updatePanelPosition();
+    }
+  }, [isOpen, updatePanelPosition]);
+
+  // Панель должна следовать за кнопкой при прокрутке и изменении размера окна.
+  useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+
+    const handleViewportChange = () => updatePanelPosition();
+
+    window.addEventListener('scroll', handleViewportChange, true);
+    window.addEventListener('resize', handleViewportChange);
+
+    return () => {
+      window.removeEventListener('scroll', handleViewportChange, true);
+      window.removeEventListener('resize', handleViewportChange);
+    };
+  }, [isOpen, updatePanelPosition]);
+
+  // Закрытие по клику вне (учитываем и кнопку, и портал с панелью).
   useEffect(() => {
     if (!isOpen) {
       return;
     }
 
     const handlePointerDown = (event: PointerEvent) => {
-      if (rootRef.current && !rootRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
+      const target = event.target as Node;
+      if (rootRef.current?.contains(target) || panelRef.current?.contains(target)) {
+        return;
       }
+
+      setIsOpen(false);
     };
 
     document.addEventListener('pointerdown', handlePointerDown);
@@ -101,15 +166,13 @@ export function SelectPill({
     return () => document.removeEventListener('pointerdown', handlePointerDown);
   }, [isOpen]);
 
-  // Фокус на панель (или на поле поиска) сразу после открытия.
+  // Фокус на поле поиска, если оно есть; иначе фокус остаётся на кнопке.
   useEffect(() => {
-    if (!isOpen) {
+    if (!isOpen || !showSearch) {
       return;
     }
 
-    if (showSearch) {
-      searchInputRef.current?.focus();
-    }
+    searchInputRef.current?.focus();
   }, [isOpen, showSearch]);
 
   const selectOption = (optionValue: string) => {
@@ -118,48 +181,69 @@ export function SelectPill({
     buttonRef.current?.focus();
   };
 
-  const handleButtonKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
-    if (disabled) {
-      return;
-    }
+  const moveActive = (delta: number) => {
+    setActiveIndex((index) => {
+      if (visibleOptions.length === 0) {
+        return 0;
+      }
 
-    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-      event.preventDefault();
-      setIsOpen(true);
-      setActiveIndex(event.key === 'ArrowDown' ? 0 : Math.max(visibleOptions.length - 1, 0));
-    }
-
-    if (event.key === 'Escape' && isOpen) {
-      event.preventDefault();
-      setIsOpen(false);
-    }
+      return (index + delta + visibleOptions.length) % visibleOptions.length;
+    });
   };
 
-  const handlePanelKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+  /** Единая обработка клавиатуры для кнопки и для панели. */
+  const handleListKeyDown = (event: KeyboardEvent<HTMLElement>) => {
     switch (event.key) {
       case 'ArrowDown': {
         event.preventDefault();
-        setActiveIndex((index) => (visibleOptions.length === 0 ? 0 : (index + 1) % visibleOptions.length));
+        if (!isOpen) {
+          setIsOpen(true);
+          setActiveIndex(0);
+          return;
+        }
+        moveActive(1);
         break;
       }
       case 'ArrowUp': {
         event.preventDefault();
-        setActiveIndex((index) =>
-          visibleOptions.length === 0 ? 0 : (index - 1 + visibleOptions.length) % visibleOptions.length,
-        );
+        if (!isOpen) {
+          setIsOpen(true);
+          setActiveIndex(Math.max(visibleOptions.length - 1, 0));
+          return;
+        }
+        moveActive(-1);
         break;
       }
       case 'Home': {
+        if (!isOpen) {
+          return;
+        }
         event.preventDefault();
         setActiveIndex(0);
         break;
       }
       case 'End': {
+        if (!isOpen) {
+          return;
+        }
         event.preventDefault();
         setActiveIndex(Math.max(visibleOptions.length - 1, 0));
         break;
       }
-      case 'Enter': {
+      case 'Enter':
+      case ' ': {
+        // В поле поиска пробел должен печататься, а не выбирать вариант.
+        if (event.key === ' ' && event.target instanceof HTMLInputElement) {
+          break;
+        }
+
+        if (!isOpen) {
+          event.preventDefault();
+          setIsOpen(true);
+          setActiveIndex(0);
+          return;
+        }
+
         const option = visibleOptions[activeIndex];
         if (option) {
           event.preventDefault();
@@ -168,7 +252,12 @@ export function SelectPill({
         break;
       }
       case 'Escape': {
+        if (!isOpen) {
+          return;
+        }
+        // Останавливаем всплытие: Escape в панели не должен закрывать родительское окно.
         event.preventDefault();
+        event.stopPropagation();
         setIsOpen(false);
         buttonRef.current?.focus();
         break;
@@ -183,7 +272,63 @@ export function SelectPill({
     }
   };
 
-  const activeOption = visibleOptions[activeIndex];
+  const panel = isOpen ? (
+    <div
+      ref={panelRef}
+      className="select-pill__panel"
+      style={panelPosition ?? undefined}
+      onKeyDown={handleListKeyDown}
+    >
+      {showSearch ? (
+        <div className="select-pill__search-row">
+          <input
+            ref={searchInputRef}
+            type="text"
+            className="select-pill__search"
+            value={search}
+            placeholder="Поиск по вариантам"
+            aria-label="Поиск по вариантам"
+            onChange={(event) => setSearch(event.target.value)}
+          />
+        </div>
+      ) : null}
+
+      <ul id={listboxId} className="select-pill__list" role="listbox">
+        {visibleOptions.map((option, index) => {
+          const isSelected = option.value === value;
+
+          return (
+            <li
+              key={option.value}
+              id={optionId(option.value)}
+              role="option"
+              aria-selected={isSelected}
+              className={[
+                'select-pill__option',
+                index === activeIndex ? 'select-pill__option--active' : null,
+                isSelected ? 'select-pill__option--selected' : null,
+              ]
+                .filter(Boolean)
+                .join(' ')}
+              onMouseEnter={() => setActiveIndex(index)}
+              onClick={() => selectOption(option.value)}
+            >
+              <span>{option.label}</span>
+              {isSelected ? (
+                <span className="select-pill__check" aria-hidden="true">
+                  ✓
+                </span>
+              ) : null}
+            </li>
+          );
+        })}
+
+        {visibleOptions.length === 0 ? (
+          <li className="select-pill__empty">Ничего не найдено</li>
+        ) : null}
+      </ul>
+    </div>
+  ) : null;
 
   return (
     <div className="select-pill" ref={rootRef}>
@@ -203,7 +348,7 @@ export function SelectPill({
         aria-invalid={invalid ? true : undefined}
         disabled={disabled}
         onClick={() => setIsOpen((opened) => !opened)}
-        onKeyDown={handleButtonKeyDown}
+        onKeyDown={handleListKeyDown}
       >
         <span className={selected ? 'select-pill__value' : 'select-pill__placeholder'}>
           {selected ? selected.label : placeholder}
@@ -213,62 +358,7 @@ export function SelectPill({
         </span>
       </button>
 
-      {isOpen ? (
-        <div className="select-pill__panel" onKeyDown={handlePanelKeyDown}>
-          {showSearch ? (
-            <div className="select-pill__search-row">
-              <input
-                ref={searchInputRef}
-                type="text"
-                className="select-pill__search"
-                value={search}
-                placeholder="Поиск по вариантам"
-                aria-label="Поиск по вариантам"
-                onChange={(event) => setSearch(event.target.value)}
-              />
-            </div>
-          ) : null}
-
-          <ul
-            id={listboxId}
-            className="select-pill__list"
-            role="listbox"
-          >
-            {visibleOptions.map((option, index) => {
-              const isSelected = option.value === value;
-
-              return (
-                <li
-                  key={option.value}
-                  id={optionId(option.value)}
-                  role="option"
-                  aria-selected={isSelected}
-                  className={[
-                    'select-pill__option',
-                    index === activeIndex ? 'select-pill__option--active' : null,
-                    isSelected ? 'select-pill__option--selected' : null,
-                  ]
-                    .filter(Boolean)
-                    .join(' ')}
-                  onMouseEnter={() => setActiveIndex(index)}
-                  onClick={() => selectOption(option.value)}
-                >
-                  <span>{option.label}</span>
-                  {isSelected ? (
-                    <span className="select-pill__check" aria-hidden="true">
-                      ✓
-                    </span>
-                  ) : null}
-                </li>
-              );
-            })}
-
-            {visibleOptions.length === 0 ? (
-              <li className="select-pill__empty">Ничего не найдено</li>
-            ) : null}
-          </ul>
-        </div>
-      ) : null}
+      {panel ? createPortal(panel, document.body) : null}
     </div>
   );
 }
