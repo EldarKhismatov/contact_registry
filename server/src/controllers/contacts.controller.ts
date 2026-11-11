@@ -2,10 +2,9 @@ import type { RequestHandler } from 'express';
 
 import { contactIdParamSchema, contactListQuerySchema } from '../../../shared/src/index.js';
 
-import { ApiError } from '../http/api-error.js';
 import type { ContactsService } from '../services/contacts.service.js';
 
-/** HTTP-слой: разбирает запрос, delegает работу сервису и отдаёт ответ. */
+/** HTTP-слой: разбирает запрос, передаёт работу сервису и отдаёт ответ. */
 export function createContactsController(service: ContactsService) {
   const list: RequestHandler = async (req, res) => {
     const query = contactListQuerySchema.parse(req.query);
@@ -42,8 +41,4 @@ export function createContactsController(service: ContactsService) {
   };
 
   return { list, getById, create, update, remove };
-}
-
-export function notFoundContact(): ApiError {
-  return ApiError.notFound('Контакт не найден');
 }

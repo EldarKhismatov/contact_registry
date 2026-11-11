@@ -1,4 +1,5 @@
 import {
+  collectFieldErrors,
   contactFormSchema,
   getStatusLabel,
   getStatusOrder,
@@ -67,15 +68,10 @@ function parseContactInput(input: unknown): ContactInput {
   const result = contactFormSchema.safeParse(input);
 
   if (!result.success) {
-    const fields: Record<string, string> = {};
-    for (const issue of result.error.issues) {
-      const field = issue.path.length > 0 ? issue.path.join('.') : 'form';
-      if (!fields[field]) {
-        fields[field] = issue.message;
-      }
-    }
-
-    throw ApiError.badRequest('Проверьте правильность заполнения полей', fields);
+    throw ApiError.badRequest(
+      'Проверьте правильность заполнения полей',
+      collectFieldErrors(result.error),
+    );
   }
 
   return {

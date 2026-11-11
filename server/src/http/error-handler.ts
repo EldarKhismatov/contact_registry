@@ -1,6 +1,8 @@
 import type { ErrorRequestHandler, RequestHandler } from 'express';
 import { ZodError } from 'zod';
 
+import { collectFieldErrors } from '../../../shared/src/index.js';
+
 import { ApiError } from './api-error.js';
 
 /** Обработчик запросов, для которых не нашлось маршрута. */
@@ -18,15 +20,10 @@ export const errorHandler: ErrorRequestHandler = (error, _req, res, _next) => {
   }
 
   if (error instanceof ZodError) {
-    const fields: Record<string, string> = {};
-    for (const issue of error.issues) {
-      const field = issue.path.length > 0 ? issue.path.join('.') : 'form';
-      if (!fields[field]) {
-        fields[field] = issue.message;
-      }
-    }
-
-    res.status(400).json({ message: 'Проверьте правильность заполнения полей', fields });
+    res.status(400).json({
+      message: 'Проверьте правильность заполнения полей',
+      fields: collectFieldErrors(error),
+    });
     return;
   }
 
