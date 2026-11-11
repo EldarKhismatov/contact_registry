@@ -7,16 +7,23 @@ import { contactKeys } from './queryKeys';
 /** Параметры списка контактов: они же входят в ключ кеша. */
 export interface ContactListParams {
   search: string;
+  /** Фильтр по статусу. Пустая строка — без фильтра. */
+  status: string;
   sortBy: SortField;
   sortDir: SortDirection;
 }
 
-function buildListQuery({ search, sortBy, sortDir }: ContactListParams): string {
+function buildListQuery({ search, status, sortBy, sortDir }: ContactListParams): string {
   const params = new URLSearchParams();
 
   const trimmedSearch = search.trim();
   if (trimmedSearch.length > 0) {
     params.set('search', trimmedSearch);
+  }
+
+  const trimmedStatus = status.trim();
+  if (trimmedStatus.length > 0) {
+    params.set('status', trimmedStatus);
   }
 
   params.set('sortBy', sortBy);

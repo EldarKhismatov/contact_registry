@@ -68,6 +68,20 @@
   }
 }
 
+/* Фильтр по статусу */
+.filter {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  width: 240px;
+}
+
+.filter__label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text-muted);
+}
+
 /* Раскладка: список и карточка рядом */
 .layout {
   display: grid;

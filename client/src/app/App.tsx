@@ -1,6 +1,6 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
 
-import { ContactsPage } from '@/features/contacts/ContactsPage';
+import { ContactsPage } from '@/pages/ContactsPage';
 
 export function App() {
   return (

@@ -7,23 +7,27 @@ import { Banner } from '@/components/ui/Banner';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Modal } from '@/components/ui/Modal';
+import { SelectPill, type SelectPillOption } from '@/components/ui/SelectPill';
 import { Spinner } from '@/components/ui/Spinner';
-
-import { ContactCard } from './ContactCard';
-import { ContactForm } from './ContactForm';
-import { ContactsTable } from './ContactsTable';
-import { useContactCard } from './useContactCard';
-import { useDebouncedValue } from './useDebouncedValue';
+import { ContactCard } from '@/features/contacts/ContactCard';
+import { ContactForm } from '@/features/contacts/ContactForm';
+import { ContactsTable } from '@/features/contacts/ContactsTable';
+import { useContactCard } from '@/features/contacts/useContactCard';
+import { useDebouncedValue } from '@/features/contacts/useDebouncedValue';
 
 interface SortState {
   field: SortField;
   direction: SortDirection;
 }
 
+/** Идентификатор «без фильтра» в пилюле статуса. */
+const ANY_STATUS = '';
+
 export function ContactsPage() {
   const { contactId, open: openCard, close: closeCard } = useContactCard();
 
   const [search, setSearch] = useState('');
+  const [status, setStatus] = useState(ANY_STATUS);
   const [sort, setSort] = useState<SortState>({ field: 'createdAt', direction: 'desc' });
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   /** Запись, карточка которой открыта в режиме редактирования. */
@@ -34,6 +38,7 @@ export function ContactsPage() {
   const statusesQuery = useStatusesQuery();
   const contactsQuery = useContactsQuery({
     search: debouncedSearch,
+    status,
     sortBy: sort.field,
     sortDir: sort.direction,
   });
@@ -42,10 +47,19 @@ export function ContactsPage() {
 
   const statuses = useMemo(() => statusesQuery.data ?? [], [statusesQuery.data]);
   const statusLabels = useMemo(
-    () => Object.fromEntries(statuses.map((status) => [status.id, status.label])),
+    () => Object.fromEntries(statuses.map((item) => [item.id, item.label])),
+    [statuses],
+  );
+  const statusOptions = useMemo<SelectPillOption[]>(
+    () => [
+      { value: ANY_STATUS, label: 'Все статусы' },
+      ...statuses.map((item) => ({ value: item.id, label: item.label })),
+    ],
     [statuses],
   );
   const contacts = contactsQuery.data ?? [];
+
+  const hasFilters = search.trim().length > 0 || status !== ANY_STATUS;
 
   const handleSortChange = (field: SortField) => {
     setSort((current) =>
@@ -58,6 +72,11 @@ export function ContactsPage() {
   const handleOpenCreate = () => {
     createMutation.reset();
     setIsCreateModalOpen(true);
+  };
+
+  const handleResetFilters = () => {
+    setSearch('');
+    setStatus(ANY_STATUS);
   };
 
   const handleCloseCard = () => {
@@ -117,6 +136,24 @@ export function ContactsPage() {
           />
         </label>
 
+        <div className="filter">
+          <span className="filter__label" id="status-filter-label">
+            Статус
+          </span>
+          <SelectPill
+            value={status}
+            options={statusOptions}
+            onChange={setStatus}
+            ariaLabel="Фильтр по статусу"
+          />
+        </div>
+
+        {hasFilters ? (
+          <Button variant="ghost" onClick={handleResetFilters}>
+            Сбросить фильтры
+          </Button>
+        ) : null}
+
         {contactsQuery.isFetching && !contactsQuery.isLoading ? (
           <span className="page__hint">Обновляем список…</span>
         ) : null}
@@ -142,14 +179,20 @@ export function ContactsPage() {
             <EmptyState
               title="Контакты не найдены"
               description={
-                search
-                  ? 'Измените поисковый запрос или очистите его, чтобы увидеть все записи.'
+                hasFilters
+                  ? 'Под текущие условия не подошёл ни один контакт — измените условия или сбросьте их.'
                   : 'Добавьте первый контакт, чтобы он появился в реестре.'
               }
               action={
-                <Button variant="primary" onClick={handleOpenCreate}>
-                  Добавить контакт
-                </Button>
+                hasFilters ? (
+                  <Button variant="secondary" onClick={handleResetFilters}>
+                    Сбросить фильтры
+                  </Button>
+                ) : (
+                  <Button variant="primary" onClick={handleOpenCreate}>
+                    Добавить контакт
+                  </Button>
+                )
               }
             />
           ) : null}
