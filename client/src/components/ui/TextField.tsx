@@ -1,4 +1,4 @@
-import { forwardRef, type InputHTMLAttributes } from 'react';
+import { forwardRef, useId, type InputHTMLAttributes } from 'react';
 
 interface TextFieldProps extends InputHTMLAttributes<HTMLInputElement> {
   label: string;
@@ -12,7 +12,11 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(function T
   { label, error, hint, id, className, ...rest },
   ref,
 ) {
-  const inputId = id ?? `field-${label.toLowerCase().replace(/\s+/g, '-')}`;
+  // Идентификатор генерируется, а не собирается из подписи: на странице может
+  // одновременно быть несколько форм (карточка и модальное окно), и одинаковые
+  // id ломают связь «подпись — поле» (label for / getByLabel).
+  const generatedId = useId().replace(/[^a-zA-Z0-9_-]/g, '');
+  const inputId = id ?? `field-${generatedId}`;
   const errorId = `${inputId}-error`;
   const hintId = `${inputId}-hint`;
 
