@@ -1,0 +1,26 @@
+# Зависимости
+node_modules/
+
+# Сборка
+dist/
+build/
+*.tsbuildinfo
+
+# Тесты и отчёты
+coverage/
+.vitest/
+
+# Данные локального сервера
+server/data/*.json
+
+# Локальное окружение
+.env
+.env.local
+
+# Служебное
+.DS_Store
+Thumbs.db
+*.log
+
+# Файл тестового задания (не часть решения)
+Frontend-кейс «Контакты».pdf
