@@ -66,7 +66,7 @@ npm run format        # Prettier по всему репозиторию
 ## Структура проекта
 
 ```
-OPTS/
+contact_registry/
 ├─ package.json              # npm workspaces: client, server; общие скрипты
 ├─ shared/src/               # общий код клиента и сервера
 │  ├─ types.ts               # Contact, ContactStatus, SortField, ApiErrorBody…
