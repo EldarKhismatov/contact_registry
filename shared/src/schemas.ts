@@ -38,6 +38,8 @@ export type ContactFormValues = z.infer<typeof contactFormSchema>;
 /** Параметры запроса списка контактов. */
 export const contactListQuerySchema = z.object({
   search: z.string().trim().max(200, 'Слишком длинный поисковый запрос').catch(''),
+  /** Фильтр по статусу. Пустая строка — без фильтра. */
+  status: z.string().trim().max(60, 'Слишком длинный идентификатор статуса').catch(''),
   sortBy: z.enum(SORT_FIELDS).catch('createdAt'),
   sortDir: z.enum(SORT_DIRECTIONS).catch('desc'),
 });

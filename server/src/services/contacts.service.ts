@@ -3,6 +3,7 @@ import {
   contactFormSchema,
   getStatusLabel,
   getStatusOrder,
+  STATUS_IDS,
   type Contact,
   type ContactInput,
   type ContactListQuery,
@@ -22,7 +23,8 @@ export class ContactsService {
 
   async list(query: ContactListQuery = {}): Promise<Contact[]> {
     const contacts = await this.repository.list();
-    const filtered = filterBySearch(contacts, query.search ?? '');
+    const searched = filterBySearch(contacts, query.search ?? '');
+    const filtered = filterByStatus(searched, query.status ?? '');
     const sortBy = query.sortBy ?? 'createdAt';
     const sortDir = query.sortDir ?? 'desc';
 
@@ -96,6 +98,15 @@ export function filterBySearch(contacts: Contact[], search: string): Contact[] {
       value.toLowerCase().includes(query),
     );
   });
+}
+
+/** Фильтр по статусу: неизвестный статус трактуется как «без фильтра». */
+export function filterByStatus(contacts: Contact[], statusId: string): Contact[] {
+  if (!statusId || !STATUS_IDS.includes(statusId)) {
+    return contacts;
+  }
+
+  return contacts.filter((contact) => contact.statusId === statusId);
 }
 
 const collator = new Intl.Collator('ru', { sensitivity: 'base', numeric: true });

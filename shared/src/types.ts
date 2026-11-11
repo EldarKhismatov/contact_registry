@@ -36,6 +36,8 @@ export type SortDirection = (typeof SORT_DIRECTIONS)[number];
 export interface ContactListQuery {
   /** Поиск по тексту: ФИО, компания, email, название статуса. */
   search?: string;
+  /** Фильтр по статусу. Пустая строка или отсутствие — без фильтра. */
+  status?: string;
   sortBy?: SortField;
   sortDir?: SortDirection;
 }
